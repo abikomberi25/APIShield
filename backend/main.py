@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from backend.config import HOST, PORT
 from backend.database import Base, engine
 import backend.models  # Ensures models are imported and registered with Base.metadata
+from backend.routes.auth import router as auth_router
 
 
 @asynccontextmanager
@@ -22,6 +23,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Mount authentication routes
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 
 @app.get("/health")
