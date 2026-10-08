@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models.user import User
-from backend.auth.security import hash_password, verify_password
+from backend.auth.security import hash_password, verify_password, create_access_token
 
 router = APIRouter()
 
@@ -42,10 +42,12 @@ class UserResponse(BaseModel):
 
 
 class LoginSuccessResponse(BaseModel):
-    """Response returned upon successful credential verification."""
+    """Response returned upon successful credential verification with JWT access token."""
 
-    message: str
+    access_token: str
+    token_type: str = "bearer"
     user: UserResponse
+    message: str = "Login successful"
 
 
 @router.post(
@@ -59,7 +61,6 @@ def register(
     db: Session = Depends(get_db),
 ) -> User:
     """Register a new user account with hashed password and default 'user' role."""
-    # Check if username is already registered to enforce uniqueness
     existing_user = db.query(User).filter(User.username == request.username).first()
     if existing_user:
         raise HTTPException(
@@ -67,10 +68,8 @@ def register(
             detail="Username already registered",
         )
 
-    # Hash plaintext password using bcrypt before persisting to database
     hashed = hash_password(request.password)
 
-    # All public registrations default strictly to role 'user'
     new_user = User(
         username=request.username,
         hashed_password=hashed,
@@ -86,23 +85,30 @@ def register(
     "/login",
     response_model=LoginSuccessResponse,
     status_code=status.HTTP_200_OK,
-    summary="Authenticate user credentials",
+    summary="Authenticate user credentials and issue JWT",
 )
 def login(
     request: UserLoginRequest,
     db: Session = Depends(get_db),
 ) -> LoginSuccessResponse:
-    """Verify user credentials against stored bcrypt hash."""
+    """Verify user credentials and issue signed JWT access token."""
     user = db.query(User).filter(User.username == request.username).first()
 
-    # Generic error message avoids user enumeration side-channels
     if not user or not verify_password(request.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
+    # Issue signed JWT containing user ID (sub), username, and role
+    access_token = create_access_token(
+        subject=str(user.id),
+        claims={"username": user.username, "role": user.role},
+    )
+
     return LoginSuccessResponse(
-        message="Login successful",
+        access_token=access_token,
+        token_type="bearer",
         user=UserResponse.model_validate(user),
+        message="Login successful",
     )

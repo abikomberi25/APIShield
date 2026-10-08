@@ -1,4 +1,4 @@
-﻿"""Tests for password hashing, registration, and login (Milestone M1-C)."""
+﻿"""Tests for password hashing, registration, and login (Milestones M1-C and M1-D)."""
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -78,7 +78,7 @@ def test_register_rejects_client_specified_role(client: TestClient) -> None:
 
 
 def test_login_success(client: TestClient) -> None:
-    """Verify login succeeds with correct credentials."""
+    """Verify login succeeds with correct credentials and issues JWT."""
     # Register user
     reg_payload = {"username": "bob", "password": "BobPassword123!"}
     client.post("/auth/register", json=reg_payload)
@@ -90,6 +90,8 @@ def test_login_success(client: TestClient) -> None:
 
     data = response.json()
     assert data["message"] == "Login successful"
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
     assert data["user"]["username"] == "bob"
     assert data["user"]["role"] == "user"
 
