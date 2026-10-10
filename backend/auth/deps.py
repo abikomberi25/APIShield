@@ -1,4 +1,4 @@
-﻿"""Authentication dependencies for FastAPI route handlers."""
+"""Authentication dependencies for FastAPI route handlers."""
 
 from typing import Annotated, Optional
 from fastapi import Depends, HTTPException, status
@@ -78,3 +78,19 @@ def get_current_user(
         )
 
     return user
+
+
+def require_admin(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Authorize incoming request strictly for users with the admin role.
+
+    Requires valid JWT authentication first (via get_current_user).
+    Raises HTTP 403 Forbidden if user is authenticated but not an admin.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user

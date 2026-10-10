@@ -1,4 +1,4 @@
-﻿"""Pytest fixtures and configuration for APIShield tests."""
+"""Pytest fixtures and configuration for APIShield tests."""
 
 from typing import Generator
 import pytest
@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.database import Base, get_db
 from backend.main import app
+from backend.security.defenses import defense_manager
 
 # StaticPool ensures that all threads and sessions share the exact same in-memory SQLite database
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -28,6 +29,14 @@ def set_sqlite_pragma(dbapi_connection, connection_record) -> None:
 
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_defense_toggles() -> Generator[None, None, None]:
+    """Ensure defense manager starts and finishes each test in default state."""
+    defense_manager.reset()
+    yield
+    defense_manager.reset()
 
 
 @pytest.fixture(scope="function")

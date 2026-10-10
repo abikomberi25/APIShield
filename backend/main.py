@@ -1,4 +1,4 @@
-﻿"""Main entry point for APIShield FastAPI application."""
+"""Main entry point for APIShield FastAPI application."""
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from backend.config import HOST, PORT
 from backend.database import Base, engine
 import backend.models  # Ensures models are imported and registered with Base.metadata
+from backend.routes.admin import router as admin_router
 from backend.routes.auth import router as auth_router
 from backend.routes.items import router as items_router
+from backend.security.middleware import SecurityGatewayMiddleware
 
 
 @asynccontextmanager
@@ -25,9 +27,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Wire security gateway middleware for latency tracking and headers
+app.add_middleware(SecurityGatewayMiddleware)
+
 # Mount application routers
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(items_router, prefix="/items", tags=["items"])
+app.include_router(admin_router, prefix="/admin", tags=["admin"])
 
 
 @app.get("/health")

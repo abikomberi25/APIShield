@@ -1,4 +1,4 @@
-﻿# APIShield
+# APIShield
 
 A controlled, reproducible platform for quantitatively evaluating detection and mitigation of OWASP API Security Top 10 (2023) risks.
 
@@ -51,4 +51,63 @@ attack → detect → defend → verify
 
 ## How to Run
 
-Implementation begins in M1.
+### 1. Environment Setup
+
+Create and activate a Python virtual environment, then install dependencies:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Ensure `.env` exists with your local secret (copy from `.env.example` if needed):
+```powershell
+Copy-Item .env.example .env
+```
+
+### 2. Database Seeding (Explicit & Idempotent)
+
+Seed the SQLite database with deterministic synthetic test data:
+
+```powershell
+python -m backend.seed
+```
+
+> [!NOTE]
+> **LOCAL / SYNTHETIC / TEST-ONLY CREDENTIALS**:
+> The following credentials are intentionally fake, synthetic test fixtures for local lab evaluation only:
+> - `alice` / `AliceSyntheticPass123!` (role: `user`, owns Items 1 & 2)
+> - `bob` / `BobSyntheticPass123!` (role: `user`, owns Items 3 & 4)
+> - `admin` / `AdminSyntheticPass123!` (role: `admin`, baseline administrative access)
+> Passwords are stored exclusively as bcrypt hashes.
+
+### 3. Running Automated Tests
+
+Run the full automated pytest suite:
+
+```powershell
+python -m pytest tests/ -v
+```
+
+### 4. Running the Development Server
+
+Start the local API development server binding strictly to `127.0.0.1:8000`:
+
+```powershell
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+## Security Gateway & Admin Endpoints (Milestone M2)
+
+### Security Gateway Middleware
+All incoming HTTP requests pass through `SecurityGatewayMiddleware`, which calculates high-resolution request duration and appends the `X-Response-Time-Ms` response header to enable quantitative latency overhead measurements.
+
+### Runtime Defense Toggles (Admin Only)
+Defenses are managed via in-memory toggles and default to `False` (all OFF) at startup:
+- `GET /admin/defenses` - Inspect current states of `bola`, `auth_hardening`, `schema_validation`, `rate_limit`, `rbac`.
+- `PATCH /admin/defenses` - Update one or more defense flags. Rejects unknown fields, non-boolean values, or empty payloads with `HTTP 422`.
+
+### Security Event Audit Log (Admin Only)
+Detected and blocked events are persisted in the SQLite `security_events` table with dual service-layer and database-level (`CheckConstraint`) validation:
+- `GET /admin/events` - Query events with bounded pagination (`limit` 1–100, `offset >= 0`) and optional `action` filter (`detected` | `blocked`).
