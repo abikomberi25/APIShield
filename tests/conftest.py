@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from backend.config import reset_lab_mode, set_lab_mode
 from backend.database import Base, get_db
 from backend.main import app
 from backend.security.defenses import defense_manager
@@ -32,11 +33,21 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_
 
 
 @pytest.fixture(autouse=True)
-def reset_defense_toggles() -> Generator[None, None, None]:
-    """Ensure defense manager starts and finishes each test in default state."""
+def reset_defense_and_lab_state() -> Generator[None, None, None]:
+    """Ensure defense manager and lab mode start and finish each test in default state."""
     defense_manager.reset()
+    reset_lab_mode()
     yield
     defense_manager.reset()
+    reset_lab_mode()
+
+
+@pytest.fixture
+def lab_mode_enabled() -> Generator[None, None, None]:
+    """Temporarily enable lab mode for the duration of a test."""
+    set_lab_mode(True)
+    yield
+    reset_lab_mode()
 
 
 @pytest.fixture(scope="function")
@@ -61,6 +72,6 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
             pass
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="http://127.0.0.1:8000") as test_client:
         yield test_client
     app.dependency_overrides.clear()

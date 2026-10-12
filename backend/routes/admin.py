@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.auth.deps import require_admin
+from backend.config import is_lab_mode
 from backend.database import get_db
 from backend.models.event import SecurityEvent
 from backend.models.user import User
@@ -83,6 +84,22 @@ class PaginatedEventsResponse(BaseModel):
     limit: int
     offset: int
     events: list[SecurityEventResponse]
+
+
+@router.get(
+    "/lab-mode",
+    status_code=status.HTTP_200_OK,
+    summary="Inspect startup lab mode status (Admin only)",
+)
+def get_lab_mode_status(
+    current_user: Annotated[User, Depends(require_admin)],
+) -> dict[str, bool]:
+    """Inspect whether the server process is currently running with lab mode enabled.
+
+    Read-only: cannot be enabled over HTTP if the server was started with APISHIELD_LAB_MODE=false.
+    Strictly protected by require_admin in all modes.
+    """
+    return {"lab_mode": is_lab_mode()}
 
 
 @router.get(

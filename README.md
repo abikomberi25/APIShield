@@ -37,17 +37,17 @@ attack → detect → defend → verify
 
 ## Milestones
 
-| # | Deliverable |
-|---|---|
-| **M0** | Repo skeleton, this spec, README, git init |
-| **M1** | FastAPI + SQLite + JWT + roles, seeded users and items, tests |
-| **M2** | Gateway middleware, defense toggles, event logging |
-| **M3** | BOLA end to end (attack, detector, defense, tests, first experiment) |
-| **M4** | Broken Auth, BOPLA, RBAC |
-| **M5** | Resource consumption + rate limiting + load tests |
-| **M6** | Dashboard |
-| **M7** | Stretch modules, ZAP/Postman baseline |
-| **M8** | Experiments, results, report or paper |
+| # | Deliverable | Status |
+|---|---|---|
+| **M0** | Repo skeleton, this spec, README, git init | Completed |
+| **M1** | FastAPI + SQLite + JWT + roles, seeded users and items, tests | Completed |
+| **M2** | Gateway middleware, defense toggles, event logging | Completed |
+| **M3** | BOLA end to end (attack, detector, defense, tests, first experiment) | Completed |
+| **M4** | Broken Auth, BOPLA, RBAC | Upcoming |
+| **M5** | Resource consumption + rate limiting + load tests | Upcoming |
+| **M6** | Dashboard | Upcoming |
+| **M7** | Stretch modules, ZAP/Postman baseline | Upcoming |
+| **M8** | Experiments, results, report or paper | Upcoming |
 
 ## How to Run
 
@@ -95,7 +95,11 @@ python -m pytest tests/ -v
 Start the local API development server binding strictly to `127.0.0.1:8000`:
 
 ```powershell
+# Default Safe Mode (Lab Mode disabled; vulnerable behavior cannot execute):
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+# Explicit Experimental Lab Mode (required for BOLA vulnerability evaluation):
+$env:APISHIELD_LAB_MODE="true"; python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
 ## Security Gateway & Admin Endpoints (Milestone M2)
@@ -107,7 +111,35 @@ All incoming HTTP requests pass through `SecurityGatewayMiddleware`, which calcu
 Defenses are managed via in-memory toggles and default to `False` (all OFF) at startup:
 - `GET /admin/defenses` - Inspect current states of `bola`, `auth_hardening`, `schema_validation`, `rate_limit`, `rbac`.
 - `PATCH /admin/defenses` - Update one or more defense flags. Rejects unknown fields, non-boolean values, or empty payloads with `HTTP 422`.
+- `GET /admin/lab-mode` - Inspect startup lab mode status (read-only; cannot be enabled over HTTP).
 
 ### Security Event Audit Log (Admin Only)
 Detected and blocked events are persisted in the SQLite `security_events` table with dual service-layer and database-level (`CheckConstraint`) validation:
 - `GET /admin/events` - Query events with bounded pagination (`limit` 1–100, `offset >= 0`) and optional `action` filter (`detected` | `blocked`).
+
+## OWASP API1:2023 BOLA Experiment (Milestone M3)
+
+### Running the BOLA Attack Experiment
+The attack script in `attacks/bola.py` executes a controlled, reproducible BOLA attack:
+1. Validates the target URL pre-flight against a strict local allowlist (`http`, `127.0.0.1:8000`).
+2. Authenticates synthetic user `alice`.
+3. Requests Bob's private item (`/items/3`).
+4. Verifies the corresponding security event via the Admin API.
+5. Writes experiment results to `docs/results/bola_results.json`.
+
+```powershell
+# 1. Start server in lab mode:
+$env:APISHIELD_LAB_MODE="true"; python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+# 2. Run attack with defense OFF (vulnerability demonstrated):
+python attacks/bola.py --target http://127.0.0.1:8000
+# -> HTTP 200, outcome: vulnerability_exploited, event verified (action: detected)
+
+# 3. Enable BOLA defense toggle via admin:
+$adminToken = (Invoke-RestMethod -Uri "http://127.0.0.1:8000/auth/login" -Method Post -Body '{"username":"admin","password":"AdminSyntheticPass123!"}' -ContentType "application/json").access_token
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/admin/defenses" -Method Patch -Headers @{Authorization="Bearer $adminToken"} -Body '{"bola":true}' -ContentType "application/json" | Out-Null
+
+# 4. Run attack with defense ON (mitigation demonstrated):
+python attacks/bola.py --target http://127.0.0.1:8000
+# -> HTTP 403, outcome: attack_blocked, event verified (action: blocked)
+```
