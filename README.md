@@ -43,7 +43,7 @@ attack → detect → defend → verify
 | **M1** | FastAPI + SQLite + JWT + roles, seeded users and items, tests | Completed |
 | **M2** | Gateway middleware, defense toggles, event logging | Completed |
 | **M3** | BOLA end to end (attack, detector, defense, tests, first experiment) | Completed |
-| **M4** | Broken Auth, BOPLA, RBAC | Upcoming |
+| **M4** | Broken Auth, BOPLA, RBAC (M4-A completed) | In Progress |
 | **M5** | Resource consumption + rate limiting + load tests | Upcoming |
 | **M6** | Dashboard | Upcoming |
 | **M7** | Stretch modules, ZAP/Postman baseline | Upcoming |
@@ -142,4 +142,31 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/admin/defenses" -Method Patch -Hea
 # 4. Run attack with defense ON (mitigation demonstrated):
 python attacks/bola.py --target http://127.0.0.1:8000
 # -> HTTP 403, outcome: attack_blocked, event verified (action: blocked)
+```
+
+## OWASP API5:2023 BFLA / RBAC Experiment (Milestone M4-A)
+
+### Running the BFLA / RBAC Attack Experiment
+The attack script in `attacks/rbac.py` executes a controlled, reproducible BFLA attack against the designated experiment endpoint `GET /admin/events`:
+1. Validates the target URL pre-flight against a strict local allowlist (`http`, `127.0.0.1:8000`).
+2. Takes an administrative event baseline snapshot (`latest_id_before`) prior to the attack to guarantee exact event correlation.
+3. Authenticates synthetic user `alice` (non-admin).
+4. Attempts unauthorized administrative function read (`GET /admin/events`).
+5. Authenticates as `admin` to verify the exact correlated security event generated during the attack (`id > latest_id_before`, matching attacker, endpoint, rule, and action).
+6. Writes experiment results to `docs/results/rbac_results.json`.
+
+```powershell
+# 1. Start server in lab mode:
+$env:APISHIELD_LAB_MODE="true"; python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+# 2. Run the full dual-mode experiment (script manages defense toggle automatically):
+python attacks/rbac.py --target http://127.0.0.1:8000
+# -> [Vulnerable] HTTP 200, outcome: vulnerability_exploited, detection_verified=True
+# -> [Defended]   HTTP 403, outcome: attack_blocked,           detection_verified=True
+# -> Results written to docs/results/rbac_results.json
+
+# 3. (Optional) Toggle the RBAC defense manually via the admin API:
+$adminToken = (Invoke-RestMethod -Uri "http://127.0.0.1:8000/auth/login" -Method Post -Body '{"username":"admin","password":"AdminSyntheticPass123!"}' -ContentType "application/json").access_token
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/admin/defenses" -Method Patch -Headers @{Authorization="Bearer $adminToken"} -Body '{"rbac":true}' -ContentType "application/json" | Out-Null
+# To disable: replace true with false in the Body above.
 ```

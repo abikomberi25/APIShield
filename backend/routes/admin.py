@@ -8,12 +8,13 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from backend.auth.deps import require_admin
+from backend.auth.deps import get_current_user, require_admin
 from backend.config import is_lab_mode
 from backend.database import get_db
 from backend.models.event import SecurityEvent
 from backend.models.user import User
 from backend.security.defenses import defense_manager
+from detection.rbac import detect_bfla
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,10 @@ def get_lab_mode_status(
 def get_defenses(
     current_user: Annotated[User, Depends(require_admin)],
 ) -> DefensesResponse:
-    """Retrieve the current state of all runtime defense toggles."""
+    """Retrieve the current state of all runtime defense toggles.
+
+    Strictly protected by require_admin in all modes.
+    """
     return DefensesResponse(defenses=defense_manager.get_defenses())
 
 
@@ -125,7 +129,10 @@ def patch_defenses(
     updates: DefenseUpdate,
     current_user: Annotated[User, Depends(require_admin)],
 ) -> DefenseUpdateResponse:
-    """Update one or more runtime defense toggle states."""
+    """Update one or more runtime defense toggle states.
+
+    Strictly protected by require_admin in all modes.
+    """
     update_dict = updates.model_dump(exclude_unset=True)
     try:
         updated_state = defense_manager.update_defenses(update_dict)
@@ -145,10 +152,10 @@ def patch_defenses(
     "/events",
     response_model=PaginatedEventsResponse,
     status_code=status.HTTP_200_OK,
-    summary="List audit security events with bounded pagination (Admin only)",
+    summary="List audit security events with bounded pagination",
 )
 def get_security_events(
-    current_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[
         int, Query(ge=1, le=100, description="Max events to return (1-100)")
@@ -159,7 +166,49 @@ def get_security_events(
         Query(description="Filter events by action"),
     ] = None,
 ) -> PaginatedEventsResponse:
-    """Query persisted security events with bounded pagination and optional filtering."""
+    """Query persisted security events with bounded pagination and optional filtering.
+
+    Designated BFLA (OWASP API5:2023) Experiment Endpoint:
+    1. Authentication (JWT verification) is required in all modes via get_current_user.
+    2. Legitimate administrators (role == 'admin') access events without generating BFLA events.
+    3. Non-admin users (role != 'admin'):
+       - Outside lab mode (is_lab_mode() is False): strictly rejected with HTTP 403 Forbidden.
+       - Inside lab mode (APISHIELD_LAB_MODE=true at boot):
+         * Evaluates defense toggle (defenses['rbac']).
+         * BFLA detector runs unconditionally (action='detected' if OFF, action='blocked' if ON).
+         * If defenses['rbac'] is ON: strictly rejected with HTTP 403 Forbidden.
+         * If defenses['rbac'] is OFF: allows the read to demonstrate BFLA vulnerability.
+    """
+    # 1. Legitimate admin access checks (never flagged as BFLA)
+    if current_user.role == "admin":
+        pass
+    else:
+        # Non-admin user attempting administrative events access
+        if not is_lab_mode():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required",
+            )
+
+        defense_active = defense_manager.get_defenses().get("rbac", False)
+
+        # BFLA detector runs unconditionally (identifies unauthorized function access and logs real event)
+        detect_bfla(
+            db=db,
+            current_user=current_user,
+            endpoint="/admin/events",
+            method="GET",
+            defense_active=defense_active,
+        )
+
+        if defense_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required",
+            )
+
+        # VULNERABLE (OWASP API5): BFLA active on GET /admin/events only when APISHIELD_LAB_MODE=true and defenses['rbac'] is OFF
+
     try:
         query = db.query(SecurityEvent)
         if action is not None:
