@@ -1,0 +1,29 @@
+{
+  "experiment": "OWASP API3:2023 BOPLA Excessive Data Exposure",
+  "timestamp": "2026-10-15T11:15:55.986560+00:00",
+  "target": "http://127.0.0.1:8000",
+  "attacker": "alice",
+  "target_item_id": 1,
+  "vulnerable_run": {
+    "defense_active": false,
+    "status_code": 200,
+    "attack_success": true,
+    "blocked": false,
+    "disclosed_internal_notes": true,
+    "disclosed_is_confidential": true,
+    "detection_verified": true,
+    "matched_event_id": 12,
+    "outcome": "vulnerability_exploited"
+  },
+  "defended_run": {
+    "defense_active": true,
+    "status_code": 403,
+    "attack_success": false,
+    "blocked": true,
+    "disclosed_internal_notes": false,
+    "disclosed_is_confidential": false,
+    "detection_verified": true,
+    "matched_event_id": 13,
+    "outcome": "attack_blocked"
+  }
+}

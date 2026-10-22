@@ -1,0 +1,25 @@
+{
+  "experiment": "OWASP API5:2023 BFLA/RBAC",
+  "timestamp": "2026-10-12T16:12:52.576526+00:00",
+  "target": "http://127.0.0.1:8000",
+  "attacker": "alice",
+  "target_endpoint": "/admin/events",
+  "vulnerable_run": {
+    "defense_active": false,
+    "status_code": 200,
+    "attack_success": true,
+    "blocked": false,
+    "detection_verified": true,
+    "matched_event_id": 10,
+    "outcome": "vulnerability_exploited"
+  },
+  "defended_run": {
+    "defense_active": true,
+    "status_code": 403,
+    "attack_success": false,
+    "blocked": true,
+    "detection_verified": true,
+    "matched_event_id": 11,
+    "outcome": "attack_blocked"
+  }
+}
