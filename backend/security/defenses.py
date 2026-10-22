@@ -9,6 +9,7 @@ DEFAULT_DEFENSES: dict[str, bool] = {
     "schema_validation": False,
     "rate_limit": False,
     "rbac": False,
+    "deprecated_route_protection": False,
 }
 
 

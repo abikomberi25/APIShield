@@ -40,6 +40,7 @@ class DefenseUpdate(BaseModel):
     schema_validation: Optional[bool] = None
     rate_limit: Optional[bool] = None
     rbac: Optional[bool] = None
+    deprecated_route_protection: Optional[bool] = None
 
     @model_validator(mode="after")
     def validate_payload(self) -> "DefenseUpdate":
