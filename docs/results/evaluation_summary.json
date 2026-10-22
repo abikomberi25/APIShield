@@ -1,0 +1,17 @@
+{
+  "_note": "This file is a placeholder. Run scripts/evaluate.py against a live server to generate real results.",
+  "_instructions": "Start the server with: APISHIELD_LAB_MODE=true uvicorn backend.main:app --reload\nThen run: python scripts/evaluate.py --all --runs 10",
+  "evaluation_timestamp": null,
+  "target": "http://127.0.0.1:8000",
+  "total_modules": 6,
+  "runs_per_module": 0,
+  "overall_success_rate": null,
+  "modules": [
+    {"module": "bola",       "total_runs": 0, "successes": 0, "failures": 0, "success_rate": null},
+    {"module": "bopla",      "total_runs": 0, "successes": 0, "failures": 0, "success_rate": null},
+    {"module": "bfla",       "total_runs": 0, "successes": 0, "failures": 0, "success_rate": null},
+    {"module": "auth",       "total_runs": 0, "successes": 0, "failures": 0, "success_rate": null},
+    {"module": "rate_limit", "total_runs": 0, "successes": 0, "failures": 0, "success_rate": null},
+    {"module": "inventory",  "total_runs": 0, "successes": 0, "failures": 0, "success_rate": null}
+  ]
+}

@@ -53,6 +53,7 @@ def test_defense_manager_defaults() -> None:
         "schema_validation": False,
         "rate_limit": False,
         "rbac": False,
+        "deprecated_route_protection": False,
     }
 
 
