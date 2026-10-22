@@ -14,8 +14,27 @@ HOST = "127.0.0.1"
 PORT = 8000
 
 # JWT Authentication configuration (SPEC.md Safety Rule 4: read from environment)
-# Real secrets must come from the environment / .env (which is git-ignored)
-JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
+# Real secrets must come from the environment / .env (which is git-ignored).
+# If missing, "change-me", or shorter than 32 chars → generate a one-time ephemeral key
+# and emit a WARNING. Never hardcode "change-me" as an operational secret.
+import secrets as _secrets
+import sys as _sys
+
+_raw_jwt_secret = os.getenv("JWT_SECRET")
+if (
+    _raw_jwt_secret is None
+    or _raw_jwt_secret == "change-me"
+    or len(_raw_jwt_secret) < 32
+):
+    JWT_SECRET: str = _secrets.token_hex(32)
+    print(
+        "WARNING: JWT_SECRET env var is missing, equals 'change-me', or is shorter than "
+        "32 characters. A one-time ephemeral key has been generated for this process. "
+        "Set a strong JWT_SECRET in your .env file for production use.",
+        file=_sys.stderr,
+    )
+else:
+    JWT_SECRET = _raw_jwt_secret
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

@@ -1,12 +1,16 @@
-﻿"""Authentication and registration routes for APIShield."""
+"""Authentication and registration routes for APIShield."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from backend.config import is_lab_mode
 from backend.database import get_db
 from backend.models.user import User
 from backend.auth.security import hash_password, verify_password, create_access_token
+from backend.security.defenses import defense_manager
+from backend.security.lockout import login_tracker
+from detection.auth import detect_brute_force
 
 router = APIRouter()
 
@@ -91,14 +95,67 @@ def login(
     request: UserLoginRequest,
     db: Session = Depends(get_db),
 ) -> LoginSuccessResponse:
-    """Verify user credentials and issue signed JWT access token."""
+    """Verify user credentials and issue signed JWT access token.
+
+    Broken Authentication experiment integration (OWASP API2:2023):
+    - Failed-login attempts are tracked per username via login_tracker.
+    - In lab mode with auth_hardening defense ON:
+      * If account is locked out: return HTTP 429 (lockout enforced / blocked).
+      * After each failed attempt: record_failure(); emit "blocked" security event.
+    - In lab mode with auth_hardening defense OFF:
+      * Lockout is NOT enforced; attempts are tracked and a "detected" event is emitted.
+    - Outside lab mode: failures are tracked but no events are emitted (safe mode).
+    - Successful login always calls record_success() to clear the counter.
+    """
+    defense_active = defense_manager.get_defenses().get("auth_hardening", False)
+    in_lab = is_lab_mode()
+
+    # BOLA-safe: check lockout before revealing whether the account exists
+    if defense_active and login_tracker.is_locked_out(request.username):
+        retry_after = login_tracker.get_lockout_remaining(request.username) or 0
+        # Emit blocked event (lockout enforced)
+        if in_lab:
+            detect_brute_force(
+                db=db,
+                username=request.username,
+                endpoint="/auth/login",
+                method="POST",
+                defense_active=True,
+                action="blocked",
+                user_id=None,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Account temporarily locked. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     user = db.query(User).filter(User.username == request.username).first()
 
     if not user or not verify_password(request.password, user.hashed_password):
+        # Record failed attempt for all modes
+        login_tracker.record_failure(request.username)
+
+        # Emit security event in lab mode only
+        if in_lab:
+            action = "blocked" if defense_active else "detected"
+            detect_brute_force(
+                db=db,
+                username=request.username,
+                endpoint="/auth/login",
+                method="POST",
+                defense_active=defense_active,
+                action=action,
+                user_id=None,
+            )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
+
+    # Successful login — clear failure counter
+    login_tracker.record_success(request.username)
 
     # Issue signed JWT containing user ID (sub), username, and role
     access_token = create_access_token(

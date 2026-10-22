@@ -11,6 +11,7 @@ from backend.database import get_db
 from backend.models.item import Item
 from backend.models.user import User
 from backend.security.defenses import defense_manager
+from backend.security.rate_limit_dep import check_rate_limit
 from detection.bola import detect_bola
 from detection.bopla import detect_bopla_read
 
@@ -40,6 +41,7 @@ class ItemInternalResponse(ItemResponse):
     response_model=Union[ItemInternalResponse, ItemResponse],
     status_code=status.HTTP_200_OK,
     summary="Retrieve an item by ID (Protected)",
+    dependencies=[Depends(check_rate_limit)],
 )
 def get_item(
     item_id: int,

@@ -11,6 +11,8 @@ from backend.config import reset_lab_mode, set_lab_mode
 from backend.database import Base, get_db
 from backend.main import app
 from backend.security.defenses import defense_manager
+from backend.security.lockout import login_tracker
+from backend.security.rate_limiter import rate_limiter
 
 # StaticPool ensures that all threads and sessions share the exact same in-memory SQLite database
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -34,12 +36,17 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_
 
 @pytest.fixture(autouse=True)
 def reset_defense_and_lab_state() -> Generator[None, None, None]:
-    """Ensure defense manager and lab mode start and finish each test in default state."""
+    """Ensure defense manager, lab mode, lockout tracker, and rate limiter start and
+    finish each test in their default state."""
     defense_manager.reset()
     reset_lab_mode()
+    login_tracker.reset_all()
+    rate_limiter.reset_all()
     yield
     defense_manager.reset()
     reset_lab_mode()
+    login_tracker.reset_all()
+    rate_limiter.reset_all()
 
 
 @pytest.fixture
