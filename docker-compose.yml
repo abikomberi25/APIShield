@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Provide JWT_SECRET via environment — never hardcode in this file
+      - JWT_SECRET=${JWT_SECRET}
+      # Set to "true" to enable lab mode for controlled experiments
+      - APISHIELD_LAB_MODE=${APISHIELD_LAB_MODE:-false}
+    volumes:
+      # Persist experiment results across container restarts
+      - ./docs/results:/app/docs/results
+    restart: unless-stopped
+    networks:
+      - apishield-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+networks:
+  apishield-net:
+    driver: bridge
