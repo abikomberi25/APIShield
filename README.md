@@ -43,7 +43,7 @@ attack → detect → defend → verify
 | **M1** | FastAPI + SQLite + JWT + roles, seeded users and items, tests | Completed |
 | **M2** | Gateway middleware, defense toggles, event logging | Completed |
 | **M3** | BOLA end to end (attack, detector, defense, tests, first experiment) | Completed |
-| **M4** | Broken Auth, BOPLA, RBAC (M4-A completed) | In Progress |
+| **M4** | Broken Auth, BOPLA, RBAC (M4-A completed; M4-B completed) | Completed |
 | **M5** | Resource consumption + rate limiting + load tests | Upcoming |
 | **M6** | Dashboard | Upcoming |
 | **M7** | Stretch modules, ZAP/Postman baseline | Upcoming |
@@ -170,3 +170,53 @@ $adminToken = (Invoke-RestMethod -Uri "http://127.0.0.1:8000/auth/login" -Method
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/admin/defenses" -Method Patch -Headers @{Authorization="Bearer $adminToken"} -Body '{"rbac":true}' -ContentType "application/json" | Out-Null
 # To disable: replace true with false in the Body above.
 ```
+
+## OWASP API3:2023 BOPLA Excessive Data Exposure Experiment (Milestone M4-B)
+
+### Safe SQLite Database Compatibility & Reset Procedure
+`Item` records include synthetic internal administrative properties (`internal_notes` and `is_confidential`).
+- **Automatic Migration**: `python -m backend.seed` automatically inspects `PRAGMA table_info(items)` and adds missing columns (`ALTER TABLE items ADD COLUMN ...`) non-destructively, preserving existing users, items, and audit logs.
+- **Manual Development Reset**: To completely reset the local SQLite database to its deterministic initial state:
+  ```powershell
+  Remove-Item apishield.db -ErrorAction SilentlyContinue
+  python -m backend.seed
+  ```
+
+### Running the BOPLA Excessive Data Exposure Attack Experiment
+The attack script in `attacks/bopla.py` executes a controlled, reproducible dual-run BOPLA experiment against `GET /items/1?include_internal=true`:
+
+**Automated Dual-Run Workflow:**
+1. Validates the target URL pre-flight against a strict local allowlist (`http`, `127.0.0.1:8000`).
+2. Verifies lab mode is enabled before any experiment activity.
+3. Captures the original `schema_validation` defense state for restoration.
+4. **Run 1 (Vulnerable Mode)**: Sets `schema_validation=OFF`, executes attack, verifies vulnerability exploitation and detection.
+5. **Run 2 (Defended Mode)**: Sets `schema_validation=ON`, executes attack, verifies blocking and detection.
+6. Restores the original `schema_validation` state on every exit path (even on failure).
+7. Writes combined dual-run results to `docs/results/bopla_read_results.json` only if both runs succeed and restoration is confirmed.
+
+**Event Correlation:**
+- Takes an administrative event baseline snapshot (`latest_id_before`) prior to each attack.
+- Authenticates synthetic user `alice` (non-admin owner of Item 1).
+- Requests Item 1 with `?include_internal=true` to probe for restricted administrative properties.
+- Authenticates as `admin` to verify the exact correlated security event (`id > latest_id_before`, matching attacker, endpoint, rule `bopla_excessive_data_exposure`, and action).
+
+```powershell
+# 1. Start server in lab mode:
+$env:APISHIELD_LAB_MODE="true"; python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+# 2. Run the automated dual-run experiment:
+python attacks/bopla.py --target http://127.0.0.1:8000
+
+# Expected output:
+# [Vulnerable] HTTP 200 | vulnerability_exploited | detection_verified=True
+# [Defended]   HTTP 403 | attack_blocked | detection_verified=True
+#
+# Results written to: docs/results/bopla_read_results.json
+```
+
+**Result Schema:**
+The combined results file contains:
+- `vulnerable_run`: Defense OFF state with disclosure and detection evidence
+- `defended_run`: Defense ON state with blocking and detection evidence
+- No credentials, tokens, or internal_notes literal values stored
+- `verification_passed` field for programmatic verification

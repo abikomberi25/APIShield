@@ -1,6 +1,6 @@
-﻿"""Item model definition for SQLAlchemy ORM."""
+"""Item model definition for SQLAlchemy ORM."""
 
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 from backend.database import Base
 
@@ -21,6 +21,12 @@ class Item(Base):
 
     # Foreign key referencing User.id; enforced by SQLite PRAGMA foreign_keys = ON
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Synthetic internal compliance notes (restricted to administrators; BOPLA evaluation property)
+    internal_notes = Column(String, nullable=True)
+
+    # Synthetic security classification flag (restricted to administrators; BOPLA evaluation property)
+    is_confidential = Column(Boolean, nullable=False, default=False)
 
     # Establish many-to-1 relationship: Many Items belong to one User
     owner = relationship("User", back_populates="items")
