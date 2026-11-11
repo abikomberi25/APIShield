@@ -1,13 +1,25 @@
 {
   "experiment": "OWASP API1:2023 BOLA",
-  "timestamp": "2026-10-11T01:21:30.701719+00:00",
+  "timestamp": "2026-10-23T02:32:29.461729+00:00",
   "target": "http://127.0.0.1:8000",
   "attacker": "alice",
   "target_object_id": 3,
-  "status_code": 403,
-  "detection_verified": true,
-  "blocked": true,
-  "attack_success": false,
-  "defense_active": true,
-  "outcome": "attack_blocked"
+  "vulnerable_run": {
+    "defense_active": false,
+    "status_code": 200,
+    "attack_success": true,
+    "blocked": false,
+    "detection_verified": true,
+    "matched_event_id": 59,
+    "outcome": "vulnerability_exploited"
+  },
+  "defended_run": {
+    "defense_active": true,
+    "status_code": 403,
+    "attack_success": false,
+    "blocked": true,
+    "detection_verified": true,
+    "matched_event_id": 60,
+    "outcome": "attack_blocked"
+  }
 }

@@ -1,6 +1,7 @@
 """Tests for OWASP API1:2023 (BOLA) attack, detection, defense, and verification."""
 
 from datetime import timedelta
+import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -305,3 +306,184 @@ def test_attack_script_reproduces_both_modes(
     assert res_on["blocked"] is True
     assert res_on["outcome"] == "attack_blocked"
     assert res_on["detection_verified"] is True
+
+
+# ── New tests for dual-run orchestration via main() ──────────────────────────
+
+def test_main_dual_run_orchestration(
+    client: TestClient, seeded_db: dict[str, Any], lab_mode_enabled: None, tmp_path: Path
+) -> None:
+    """Verify main() dual-run orchestration: both runs verified, combined JSON written."""
+    from attacks.bola import main as bola_main
+
+    results_path = tmp_path / "bola_results.json"
+    bola_main(
+        target_url="http://127.0.0.1:8000",
+        results_path=results_path,
+        client=client,
+        raise_on_failure=True,
+    )
+
+    assert results_path.exists(), "Combined results file must be written"
+    combined = json.loads(results_path.read_text())
+
+    assert "vulnerable_run" in combined
+    assert "defended_run" in combined
+    vr = combined["vulnerable_run"]
+    dr = combined["defended_run"]
+
+    assert vr["attack_success"] is True
+    assert vr["blocked"] is False
+    assert vr["outcome"] == "vulnerability_exploited"
+    assert vr["detection_verified"] is True
+    assert isinstance(vr["matched_event_id"], int)
+
+    assert dr["attack_success"] is False
+    assert dr["blocked"] is True
+    assert dr["outcome"] == "attack_blocked"
+    assert dr["detection_verified"] is True
+    assert isinstance(dr["matched_event_id"], int)
+
+    # No credentials in combined result
+    text = results_path.read_text()
+    assert "AliceSyntheticPass123" not in text
+    assert "AdminSyntheticPass123" not in text
+    assert "Authorization" not in text
+    assert "access_token" not in text
+
+
+def test_main_no_report_when_results_path_false(
+    client: TestClient, seeded_db: dict[str, Any], lab_mode_enabled: None, tmp_path: Path
+) -> None:
+    """Verify that main() with results_path=False does not write a combined report."""
+    from attacks.bola import main as bola_main
+
+    bola_main(
+        target_url="http://127.0.0.1:8000",
+        results_path=False,
+        client=client,
+        raise_on_failure=True,
+    )
+
+    # No file should be written
+    for p in tmp_path.iterdir():
+        assert not p.name.endswith(".json"), f"Unexpected JSON file: {p}"
+
+
+def test_main_aborts_if_lab_mode_off(
+    client: TestClient, seeded_db: dict[str, Any], tmp_path: Path
+) -> None:
+    """Verify main() aborts early when lab mode is not enabled."""
+    from attacks.bola import main as bola_main
+
+    results_path = tmp_path / "should_not_exist.json"
+    with pytest.raises(RuntimeError, match="[Ll]ab mode"):
+        bola_main(
+            target_url="http://127.0.0.1:8000",
+            results_path=results_path,
+            client=client,
+            raise_on_failure=True,
+        )
+    assert not results_path.exists()
+
+
+def test_main_attack_exception_restores_state(
+    client: TestClient, seeded_db: dict[str, Any], lab_mode_enabled: None, tmp_path: Path
+) -> None:
+    """Verify that when run_bola_attack raises, the bola defense is restored and no report is written."""
+    from attacks.bola import main as bola_main
+
+    results_path = tmp_path / "bola_results.json"
+
+    original_bola = defense_manager.get_defenses()["bola"]
+
+    with patch("attacks.bola.run_bola_attack") as mock_attack:
+        mock_attack.side_effect = RuntimeError("Simulated attack failure")
+        with pytest.raises(RuntimeError):
+            bola_main(
+                target_url="http://127.0.0.1:8000",
+                results_path=results_path,
+                client=client,
+                raise_on_failure=True,
+            )
+
+    # Defense must be restored
+    assert defense_manager.get_defenses()["bola"] == original_bola
+    # Combined report must NOT be written
+    assert not results_path.exists()
+
+
+def test_main_second_toggle_failure_no_report(
+    client: TestClient, seeded_db: dict[str, Any], lab_mode_enabled: None, tmp_path: Path
+) -> None:
+    """Verify that when the second PATCH (bola=True) fails, no combined report is written."""
+    from attacks.bola import main as bola_main
+
+    results_path = tmp_path / "bola_results.json"
+
+    original_patch = client.patch
+
+    call_count = 0
+
+    def patched_patch(url, **kwargs):
+        nonlocal call_count
+        body = kwargs.get("json", {})
+        # Let the first PATCH (bola=False) succeed; make the second PATCH (bola=True) fail
+        if body.get("bola") is True and call_count == 0:
+            call_count += 1
+            from unittest.mock import MagicMock
+            mock_resp = MagicMock()
+            mock_resp.status_code = 500
+            mock_resp.json.return_value = {}
+            return mock_resp
+        return original_patch(url, **kwargs)
+
+    client.patch = patched_patch
+    try:
+        with pytest.raises(RuntimeError):
+            bola_main(
+                target_url="http://127.0.0.1:8000",
+                results_path=results_path,
+                client=client,
+                raise_on_failure=True,
+            )
+    finally:
+        client.patch = original_patch
+
+    assert not results_path.exists()
+
+
+def test_main_detection_failure_no_report(
+    client: TestClient, seeded_db: dict[str, Any], lab_mode_enabled: None, tmp_path: Path
+) -> None:
+    """Verify that when detection verification fails (verification_passed=False), no report is written."""
+    from attacks.bola import main as bola_main
+
+    results_path = tmp_path / "bola_results.json"
+
+    with patch("attacks.bola.run_bola_attack") as mock_attack:
+        # Return a result where verification_passed is False
+        mock_attack.return_value = {
+            "experiment": "OWASP API1:2023 BOLA",
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "target": "http://127.0.0.1:8000",
+            "attacker": "alice",
+            "target_object_id": 3,
+            "status_code": 200,
+            "detection_verified": False,
+            "matched_event_id": None,
+            "blocked": False,
+            "attack_success": True,
+            "defense_active": False,
+            "outcome": "unverified_detection",
+            "verification_passed": False,
+        }
+        with pytest.raises(RuntimeError, match="[Vv]erif"):
+            bola_main(
+                target_url="http://127.0.0.1:8000",
+                results_path=results_path,
+                client=client,
+                raise_on_failure=True,
+            )
+
+    assert not results_path.exists()

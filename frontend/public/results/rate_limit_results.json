@@ -1,0 +1,31 @@
+{
+  "experiment": "OWASP API4:2023 Unrestricted Resource Consumption",
+  "timestamp": "2026-10-23T00:42:22.649957+00:00",
+  "target": "http://127.0.0.1:8000",
+  "attacker": "alice",
+  "burst_count": 25,
+  "vulnerable_run": {
+    "defense_active": false,
+    "results_200_allowed": 25,
+    "results_429_limited": 0,
+    "attack_success_rate": 1.0,
+    "block_rate": 0.0,
+    "detection_verified": true,
+    "matched_event_id": 33,
+    "outcome": "vulnerability_exploited",
+    "latency_p50_ms": 6.25,
+    "latency_p95_ms": 19.17
+  },
+  "defended_run": {
+    "defense_active": true,
+    "results_200_allowed": 0,
+    "results_429_limited": 25,
+    "attack_success_rate": 0.0,
+    "block_rate": 1.0,
+    "detection_verified": true,
+    "matched_event_id": 58,
+    "outcome": "attack_blocked",
+    "latency_p50_ms": 14.53,
+    "latency_p95_ms": 19.27
+  }
+}

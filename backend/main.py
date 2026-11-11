@@ -1,44 +1,65 @@
-"""Main entry point for APIShield FastAPI application."""
+
+"""Main entry point for the APIShield FastAPI application."""
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+
 from fastapi import FastAPI
-from backend.config import HOST, PORT
+from fastapi.middleware.cors import CORSMiddleware
+
 from backend.database import Base, engine
-import backend.models  # Ensures models are imported and registered with Base.metadata
+import backend.models
+
 from backend.routes.admin import router as admin_router
 from backend.routes.auth import router as auth_router
 from backend.routes.inventory import router as inventory_router
 from backend.routes.items import router as items_router
+
 from backend.security.middleware import SecurityGatewayMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan context manager for startup and shutdown tasks."""
-    # Create database tables if they do not already exist
+    """Initialize database tables during application startup."""
     Base.metadata.create_all(bind=engine)
     yield
 
 
 app = FastAPI(
     title="APIShield",
-    description="A controlled platform for evaluating OWASP API Security Top 10 risks",
+    description=(
+        "A controlled platform for evaluating "
+        "OWASP API Security Top 10 risks"
+    ),
     version="0.1.0",
     lifespan=lifespan,
 )
 
-# Wire security gateway middleware for latency tracking and headers
+# Register the security gateway.
+# This middleware measures request processing time.
 app.add_middleware(SecurityGatewayMiddleware)
 
-# Mount application routers
+# Register CORS so browser preflight requests are handled
+# before reaching the security gateway and API routes.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register application routers.
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(items_router, prefix="/items", tags=["items"])
 app.include_router(admin_router, prefix="/admin", tags=["admin"])
-app.include_router(inventory_router)  # routes carry their own prefixes (/admin/inventory, /api/v0/items)
+app.include_router(inventory_router)
 
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
-    """Health check endpoint to verify server liveness."""
+    """Verify that the API server is running."""
     return {"status": "ok"}

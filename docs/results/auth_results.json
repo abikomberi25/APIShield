@@ -1,0 +1,28 @@
+{
+  "experiment": "OWASP API2:2023 Broken Authentication",
+  "timestamp": "2026-10-23T05:02:43.994721+00:00",
+  "target": "http://127.0.0.1:8000",
+  "target_username": "alice",
+  "attempt_count": 7,
+  "vulnerable_run": {
+    "defense_active": false,
+    "failed_401": 7,
+    "failed_429": 0,
+    "account_accessible_after_attempts": true,
+    "account_locked_after_attempts": false,
+    "detection_verified": true,
+    "matched_event_id": 78,
+    "outcome": "vulnerability_exploited"
+  },
+  "defended_run": {
+    "defense_active": true,
+    "failed_401": 5,
+    "failed_429": 2,
+    "first_lockout_at_attempt": 6,
+    "account_accessible_after_attempts": false,
+    "account_locked_after_attempts": true,
+    "detection_verified": true,
+    "matched_event_id": 86,
+    "outcome": "attack_blocked"
+  }
+}

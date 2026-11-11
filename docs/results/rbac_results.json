@@ -1,6 +1,6 @@
 {
   "experiment": "OWASP API5:2023 BFLA/RBAC",
-  "timestamp": "2026-10-12T16:12:52.576526+00:00",
+  "timestamp": "2026-10-23T05:24:42.443203+00:00",
   "target": "http://127.0.0.1:8000",
   "attacker": "alice",
   "target_endpoint": "/admin/events",
@@ -10,7 +10,7 @@
     "attack_success": true,
     "blocked": false,
     "detection_verified": true,
-    "matched_event_id": 10,
+    "matched_event_id": 87,
     "outcome": "vulnerability_exploited"
   },
   "defended_run": {
@@ -19,7 +19,7 @@
     "attack_success": false,
     "blocked": true,
     "detection_verified": true,
-    "matched_event_id": 11,
+    "matched_event_id": 88,
     "outcome": "attack_blocked"
   }
 }
